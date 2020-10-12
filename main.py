@@ -111,41 +111,51 @@ if __name__ == '__main__':
 
     game_module.initialize()
     game_module.focus_raid()
-    game_module.configure()
-    print('Выполнить переход к локации? (y/n)')
+    sleep(0.5)
+    game_module.auto_configure()
+
+    print('Выполнить автоматическую конфигурацию? (y/n)')
     answer = input()
     if answer == 'y':
         game_module.focus_raid()
-        game_module.go_main_actions()
-        game_module.go_actions_campaign()
-        game_module.go_campaign_location()
-        game_module.go_location_level()
-    is_first = True
-    is_exit = False
-    while not is_exit:
-        print('Input count of fights or q for exit: ')
-        inp = input()
-        if inp == "q":
-            is_exit = True
-        else:
-            count_fights = int(inp)
-            if count_fights < 1:
-                print('Incorrect value!')
-                continue
-            elif count_fights > 110:
-                print('Are you sure about this? (y/n)')
-                accept = input()
-                if accept != "y":
-                    continue
+        game_module.auto_configure()
+    else:
+        game_module.focus_raid()
+        game_module.configure()
+        print('Выполнить переход к локации? (y/n)')
+        answer = input()
+        if answer == 'y':
             game_module.focus_raid()
-            if is_first:
-                game_module.click_start()
+            game_module.go_main_actions()
+            game_module.go_actions_campaign()
+            game_module.go_campaign_location()
+            game_module.go_location_level()
+        is_first = True
+        is_exit = False
+        while not is_exit:
+            print('Input count of fights or q for exit: ')
+            inp = input()
+            if inp == "q":
+                is_exit = True
             else:
-                game_module.click_repeat()
-            is_first = False
-            for index in range(0, count_fights - 1):
-                print('Current iteration: {}'.format(index + 1))
-                game_module.wait_fighting()
-                game_module.click_repeat()
+                count_fights = int(inp)
+                if count_fights < 1:
+                    print('Incorrect value!')
+                    continue
+                elif count_fights > 110:
+                    print('Are you sure about this? (y/n)')
+                    accept = input()
+                    if accept != "y":
+                        continue
+                game_module.focus_raid()
+                if is_first:
+                    game_module.click_start()
+                else:
+                    game_module.click_repeat()
+                is_first = False
+                for index in range(0, count_fights - 1):
+                    print('Current iteration: {}'.format(index + 1))
+                    game_module.wait_fighting()
+                    game_module.click_repeat()
 
     cv2.waitKey(0)

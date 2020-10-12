@@ -59,7 +59,22 @@ def is_main_menu(source_img):
     cropped = source_img[int(height * 0.3):int(height * 0.6), 0:int(width * 0.1)]
     extracted = __extract_color(cropped, (16, 40, 50))
     contours, _ = cv2.findContours(extracted, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    return total_area > 3000 and len(contours) == 4
+    max_contour = max(contours, key=lambda item: cv2.contourArea(item))
+    x, y, w, h = cv2.boundingRect(max_contour)
+    area1 = cv2.contourArea(max_contour)
+    area2 = w * h
+    ratio = area1 / area2
+    return total_area > 3000 and ratio > 0.85
+
+
+def get_battle_btn(source_img):
+    color_lower = (50, 0, 0)
+    color_upper = (190, 20, 20)
+    extracted = __extract_colors(source_img, color_lower, color_upper)
+    contours, _ = cv2.findContours(extracted, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [cv2.boundingRect(item) for item in contours]
+    max_contour = max(contours, key=lambda item: item[2] * item[3])
+    return max_contour
 
 
 def __get_circles(source_img):
@@ -159,6 +174,7 @@ def get_object_position(source_img, template_img):
 def get_actions_rectangles(source_img):
     """
     Возвращает координаты прямоугольников с игровыми активностями (Кампания, войны фракции и т.д.)
+    Сортировка первый - крайний левый баннер
     :return: Array of (x, y, width, height)
     """
     closed = __extract_color(source_img, (5, 37, 58))
@@ -173,6 +189,8 @@ def get_actions_rectangles(source_img):
 
     for contour in contours_remove:
         contour_rectangles.remove(contour)
+
+    contour_rectangles.sort(key=lambda item: item[0])
 
     return contour_rectangles
 

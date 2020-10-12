@@ -22,8 +22,10 @@ __repeat_btn_file = 'repeat_btn.png'
 __border_height = 40
 __window_info = None
 __raid_hwnd = None
+__current_screen = RaidScreen.MAIN_MENU
 battle_position = None
 campaign_position = None
+dungeon_position = None
 count_scroll = 0
 location_position = None
 location_template = None
@@ -361,3 +363,37 @@ def configure():
            'Перейдите в главное меню. Вводите в консоль число (количество прохождений) для начала фарма.',
            'Finish',
            'OK')
+
+
+def auto_configure():
+    global battle_position
+    global __current_screen
+    global dungeon_position
+    global campaign_position
+    raid_screenshot = get_screen()
+    _, width, height = raid_screenshot.shape[::-1]
+    if not search_module.is_main_menu(raid_screenshot):
+        print('Please go to main menu and try again')
+        return
+    __current_screen = RaidScreen.MAIN_MENU
+    print('Current screen: {}'.format(__current_screen))
+    battle_loc = search_module.get_battle_btn(raid_screenshot[int(height * 0.7):height, int(width * 0.7):width])
+    battle_position = Point(battle_loc[0] + int(width * 0.7),
+                            battle_loc[1] + int(height * 0.7),
+                            battle_loc[2], battle_loc[3])
+    print('Found battle button')
+    __mouse_move(battle_position.center()[0], battle_position.center()[1])
+    pyautogui.click()
+    sleep(__random_deviation(0.5))
+    actions = search_module.get_actions_rectangles(get_screen())
+    if actions is None:
+        print('Error while searching for actions')
+        return
+    campaign_position = Point(actions[0][0], actions[0][1], actions[0][2], actions[0][3])
+    dungeon_position = Point(actions[1][0], actions[1][1], actions[1][2], actions[1][3])
+    print('Found actions')
+    __mouse_move(campaign_position.center()[0], campaign_position.center()[1])
+    pyautogui.click()
+    sleep(__random_deviation(0.5))
+    
+
