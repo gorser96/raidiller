@@ -2,6 +2,7 @@
 import win32gui
 import cv2
 from point import Point
+import numpy as np
 from numpy import uint8
 from numpy.ma import array
 from ctypes import windll
@@ -9,6 +10,8 @@ from time import sleep
 from PIL import ImageGrab
 from enums import RaidScreen
 from easygui import *
+from test_utils import test_show
+import math
 import search_module
 import pyautogui
 import random
@@ -365,6 +368,40 @@ def configure():
            'OK')
 
 
+from threading import Thread
+
+
+class FeatureThread(Thread):
+    """
+    Пример многопоточной загрузки файлов из интернета
+    """
+
+    def __init__(self):
+        """Инициализация потока"""
+        Thread.__init__(self)
+
+    def run(self):
+        """Запуск потока"""
+        is_exit = False
+        while not is_exit:
+            raid_screenshot = get_screen()
+            points = search_module.test_features(raid_screenshot)
+            for point in points:
+                cv2.rectangle(raid_screenshot,
+                              (point.x, point.y),
+                              (point.x + point.width, point.y + point.height),
+                              (0, 255, 0),
+                              1)
+            cv2.imshow('thread', raid_screenshot)
+            cv2.waitKey(1)
+
+
+def feature_thread():
+    thread = FeatureThread()
+    thread.start()
+
+
+
 def auto_configure():
     global battle_position
     global __current_screen
@@ -395,5 +432,5 @@ def auto_configure():
     __mouse_move(campaign_position.center()[0], campaign_position.center()[1])
     pyautogui.click()
     sleep(__random_deviation(0.5))
-    
+
 

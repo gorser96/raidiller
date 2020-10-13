@@ -266,3 +266,61 @@ def __get_difficult_rectangle(source_img):
     bounded_contours = [cv2.boundingRect(x) for x in contours_filtered]
     dif_contour = min(bounded_contours, key=lambda x: x[0])
     return dif_contour
+
+
+def test_features(source_img):
+    raid_screenshot = source_img.copy()
+    _, width, height = raid_screenshot.shape[::-1]
+    color_lower = (3, 10, 26)
+    color_upper = (6, 16, 29)
+    extracted = __extract_colors(raid_screenshot, color_lower, color_upper)
+    contours, _ = cv2.findContours(extracted, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    max_contour = max(contours, key=lambda item: cv2.contourArea(item))
+    x, y, w, h = cv2.boundingRect(max_contour)
+    y_lower = h
+    y_upper = int(height * 0.7)
+    cropped = raid_screenshot[y + y_lower:y_upper, 0:width]
+    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    harris_corners = cv2.cornerHarris(gray, 3, 3, 0.05)
+    harris_corners = cv2.dilate(harris_corners, None)
+    _, harris_corners = cv2.threshold(harris_corners, 0.06 * harris_corners.max(), 255, 0)
+    harris_corners = np.uint8(harris_corners)
+    _, labels, stats, centroids = cv2.connectedComponentsWithStats(harris_corners)
+    centroids_of_centroids = [[] for i in centroids]
+    for index in range(len(centroids_of_centroids)):
+        centroids_of_centroids[index].append(index)
+
+    blank_image = np.zeros((height, width, 3), np.uint8)
+    for centroid in centroids:
+        x, y = centroid
+        cv2.circle(blank_image, (int(x), int(y)), 5, (255, 255, 255), -1)
+    cv2.imshow('features', blank_image)
+
+    min_distance = (width * height) / (100 * 115) * 1.2
+    length = len(centroids)
+    for index1 in range(length - 1):
+        x1, y1 = centroids[index1]
+        for index2 in range(index1 + 1, length):
+            x2, y2 = centroids[index2]
+            distance = math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2))
+            if distance < min_distance:
+                centroids_of_centroids[index1].append(index2)
+    length = len(centroids_of_centroids)
+    for index1 in range(length - 1):
+        for index2 in range(index1 + 1, length):
+            if len(list(set(centroids_of_centroids[index1]) & set(centroids_of_centroids[index2]))) > 0:
+                centroids_of_centroids[index1] = list(
+                    set(centroids_of_centroids[index1] + centroids_of_centroids[index2]))
+                centroids_of_centroids[index2] = [index2]
+    centroids_of_centroids = list(filter(lambda item: 5 < len(item), centroids_of_centroids))
+    result_list = []
+    for item in centroids_of_centroids:
+        points = [centroids[val] for val in item]
+        x = int(min(points, key=lambda point: point[0])[0])
+        y = int(min(points, key=lambda point: point[1])[1])
+        w = int(max(points, key=lambda point: point[0])[0]) - x
+        h = int(max(points, key=lambda point: point[1])[1]) - y
+        result_list.append(Point(x, y + y_lower, w, h))
+        # cv2.rectangle(cropped, (x, y), (x + w, y + h), (0, 255, 0), 1)
+    # result_list = list(filter(lambda item: item.width < item.height, result_list))
+    return result_list
