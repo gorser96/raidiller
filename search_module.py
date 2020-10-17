@@ -377,16 +377,20 @@ def get_rect_features(source_img):
 
     min_distance = (width * height) / (100 * 115) * 1.2
     length = len(centroids)
-    for index1 in range(length - 1):
+    for index1 in range(0, length):
         x1, y1 = centroids[index1]
-        for index2 in range(index1 + 1, length):
+        for index2 in range(0, length):
+            if index1 == index2:
+                continue
             x2, y2 = centroids[index2]
             distance = math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2))
             if distance < min_distance:
                 centroids_of_centroids[index1].append(index2)
     length = len(centroids_of_centroids)
-    for index1 in range(length - 1):
-        for index2 in range(index1 + 1, length):
+    for index1 in range(0, length):
+        for index2 in range(0, length):
+            if index1 == index2:
+                continue
             if len(list(set(centroids_of_centroids[index1]) & set(centroids_of_centroids[index2]))) > 0:
                 centroids_of_centroids[index1] = list(
                     set(centroids_of_centroids[index1] + centroids_of_centroids[index2]))
@@ -493,6 +497,7 @@ def get_start_btn_pre_fight(source_img):
     :param source_img:
     :return: класс Point
     """
+    test_show(source_img)
     color_from = (176, 114, 0)
     color_to = (186, 130, 6)
     mask = cv2.inRange(source_img, color_from, color_to)
@@ -501,6 +506,8 @@ def get_start_btn_pre_fight(source_img):
     (centers, hierarchy) = cv2.findContours(closed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     rectangles = [cv2.boundingRect(x) for x in centers]
     btn_rect = max(rectangles, key=lambda x: x[2] * x[3])
+    test_draw_rect(source_img, btn_rect)
+    test_show(source_img)
     return Point(btn_rect[0], btn_rect[1], btn_rect[2], btn_rect[3])
 
 
@@ -589,3 +596,26 @@ def is_end_of_fight(source_img):
     #     cv2.circle(cropped_left, max_circle[0], int(max_circle[1]), (0, 255, 0), 2)
     # test_show(cropped_left)
     return False
+
+
+def get_end_fight_buttons(source_img):
+    _, width, height = source_img.shape[::-1]
+    cropped_right = source_img[int(height * 0.8):height, int(width * 0.3):width]
+    gray = cv2.cvtColor(cropped_right, cv2.COLOR_BGR2GRAY)
+    canny = cv2.Canny(gray, 170, 250)
+    contours, _ = cv2.findContours(canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(filter(lambda item: cv2.contourArea(item) > 100, contours))
+    if len(contours) < 3:
+        return False
+    contours = [cv2.boundingRect(item) for item in contours]
+    contours.sort(key=lambda item: item[2] * item[3], reverse=True)
+    max_area = max([item[2] * item[3] for item in contours])
+    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 100, contours))
+    contours.sort(key=lambda item: item[0])
+    filtered = []
+    for index in range(1, len(contours)):
+        if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
+            filtered.append(contours[index])
+    buttons_rect = [Point(rect[0] + int(width * 0.3), rect[1] + int(height * 0.8), rect[2], rect[3]) for rect in filtered]
+    buttons_rect.sort(key=lambda item: item.x)
+    return buttons_rect

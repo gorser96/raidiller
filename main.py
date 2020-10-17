@@ -1,16 +1,8 @@
 # coding=utf-8
-import cv2
-import numpy as np
-import pyautogui
-import win32gui
 import smtplib
-from PIL import ImageGrab
-from numpy import uint8
-from numpy.ma import array
-from time import sleep
-from ctypes import windll
-import game_interface
-import game_module
+import sys
+from PyQt5.QtWidgets import QApplication
+import gui
 
 
 def send_email(host, username, password, subject, to_addr, body_text):
@@ -105,61 +97,6 @@ if __name__ == '__main__':
     #         cv2.rectangle(gray2, (x, y), (x + w, y + h), (0, 255, 0), 1)
     # cv2.imshow('gray2', gray2)
     # print(int(lvl_s))
-
-    # raid = game_interface.RaidWindow()
-    # raid.initialize_positions()
-
-    game_module.initialize()
-    game_module.focus_raid()
-    game_module.auto_configure()
-    # game_module.focus_raid()
-    sleep(0.5)
-    # game_module.feature_thread()
-    # game_module.auto_configure()
-
-    print('Выполнить автоматическую конфигурацию? (y/n)')
-    answer = input()
-    if answer == 'y':
-        game_module.focus_raid()
-        game_module.auto_configure()
-    else:
-        game_module.focus_raid()
-        game_module.configure()
-        print('Выполнить переход к локации? (y/n)')
-        answer = input()
-        if answer == 'y':
-            game_module.focus_raid()
-            game_module.go_main_actions()
-            game_module.go_actions_campaign()
-            game_module.go_campaign_location()
-            game_module.go_location_level()
-        is_first = True
-        is_exit = False
-        while not is_exit:
-            print('Input count of fights or q for exit: ')
-            inp = input()
-            if inp == "q":
-                is_exit = True
-            else:
-                count_fights = int(inp)
-                if count_fights < 1:
-                    print('Incorrect value!')
-                    continue
-                elif count_fights > 110:
-                    print('Are you sure about this? (y/n)')
-                    accept = input()
-                    if accept != "y":
-                        continue
-                game_module.focus_raid()
-                if is_first:
-                    game_module.click_start()
-                else:
-                    game_module.click_repeat()
-                is_first = False
-                for index in range(0, count_fights - 1):
-                    print('Current iteration: {}'.format(index + 1))
-                    game_module.wait_fighting()
-                    game_module.click_repeat()
-                    sleep(3)
-
-    cv2.waitKey(0)
+    app = QApplication(sys.argv)
+    window = gui.MainWindow()
+    sys.exit(app.exec_())

@@ -2,7 +2,6 @@
 import win32gui
 import cv2
 from point import Point
-import numpy as np
 from numpy import uint8
 from numpy.ma import array
 from ctypes import windll
@@ -10,8 +9,7 @@ from time import sleep
 from PIL import ImageGrab
 from enums import RaidScreen
 from easygui import *
-from test_utils import test_show
-import math
+from test_utils import test_show, test_draw_point
 import search_module
 import pyautogui
 import random
@@ -250,6 +248,13 @@ def click_start():
         pyautogui.click()
 
 
+def click_repeat_auto():
+    buttons = search_module.get_end_fight_buttons(get_screen())
+    repeat_btn = buttons[0]
+    __mouse_move(repeat_btn.center()[0], repeat_btn.center()[1])
+    pyautogui.click()
+
+
 def click_repeat():
     __mouse_move(repeat_position.center()[0], repeat_position.center()[1])
     pyautogui.click()
@@ -258,10 +263,12 @@ def click_repeat():
 def wait_fighting():
     is_done = False
     while not is_done:
-        raid_screenshot = get_screen()
-        repeat_btn = search_module.get_object_position(raid_screenshot, repeat_btn_template)
-        if repeat_btn is not None:
+        frame1 = get_screen().copy()
+        sleep(0.5)
+        frame2 = get_screen().copy()
+        if not search_module.is_fighting(frame1, frame2):
             is_done = True
+        sleep(__random_deviation(0.5))
     sleep(__random_deviation(0.5))
 
 
@@ -273,6 +280,19 @@ def initialize():
     print('Detected raid window: {} {}'.format(__window_info.x, __window_info.y))
     # ожидание переключения окна
     sleep(0.2)
+
+
+def update_window_info():
+    global __raid_hwnd
+    global __window_info
+    if win32gui.IsWindowVisible(__raid_hwnd):
+        rect = win32gui.GetWindowRect(__raid_hwnd)
+        x = rect[0]
+        y = rect[1]
+        w = rect[2] - x
+        h = rect[3] - y
+        __window_info = Point(x, y, w, h)
+    return __window_info
 
 
 def configure():
@@ -436,17 +456,16 @@ def auto_configure():
     global campaign_position
     global location_position
     global start_position
-    sleep(__random_deviation(0.5))
-    raid_screenshot = get_screen()
-    cur_screen = get_current_screen()
-    print('Current screen: {}'.format(cur_screen))
+    global level
 
-    _, width, height = raid_screenshot.shape[::-1]
-    if not search_module.is_main_menu(raid_screenshot):
+    sleep(__random_deviation(0.5))
+    __current_screen = get_current_screen()
+    if __current_screen != RaidScreen.MAIN_MENU:
         print('Please go to main menu and try again')
         return
-    __current_screen = RaidScreen.MAIN_MENU
-    print('Current screen: {}'.format(__current_screen))
+
+    raid_screenshot = get_screen()
+    _, width, height = raid_screenshot.shape[::-1]
     battle_loc = search_module.get_battle_btn(raid_screenshot[int(height * 0.7):height, int(width * 0.7):width])
     battle_position = Point(battle_loc[0] + int(width * 0.7),
                             battle_loc[1] + int(height * 0.7),
@@ -466,14 +485,15 @@ def auto_configure():
     pyautogui.click()
     sleep(__random_deviation(0.5))
     go_scroll_location(5)
-    location_avatars = search_module.get_rect_features(get_screen())
+    raid_screenshot = get_screen()
+    location_avatars = search_module.get_rect_features(raid_screenshot)
+    location_avatars = list(filter(lambda loc: loc.height > loc.width, location_avatars))
     location_position = location_avatars[-1]
     print('Found location position (sulfur trail)')
     __mouse_move(location_position.center()[0], location_position.center()[1])
     pyautogui.click()
     sleep(__random_deviation(0.5))
-    go_location_level()
+    level = 6
     __click_level()
     start_position = search_module.get_start_btn_pre_fight(get_screen())
     print('Found start button from pre fight screen')
-    __save_config()
