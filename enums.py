@@ -13,6 +13,8 @@ class RaidScreen(Enum):
     CAMPAIGN_LEVEL = 9
     PRE_FIGHT = 10
     FIGHT = 11
+    AD = 12
+    END_FIGHT = 13
 
 
 class CampaignDifficult(IntEnum):

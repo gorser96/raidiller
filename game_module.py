@@ -140,6 +140,7 @@ def __click_level():
                      __window_info.y + btn_position.center()[1] + __border_height,
                      __random_speed())
     pyautogui.click()
+    sleep(__random_deviation(0.5))
 
 
 def focus_raid():
@@ -164,6 +165,8 @@ def get_current_screen():
     raid_screenshot = get_screen()
 
     is_adv = search_module.is_ad(raid_screenshot)
+    if is_adv:
+        return RaidScreen.AD
 
     is_main = search_module.is_main_menu(raid_screenshot)
     if is_main:
@@ -173,7 +176,22 @@ def get_current_screen():
     if len(action_rectangles) > 2:
         return RaidScreen.ACTIONS
 
-    in_fight = search_module.is_fighting(raid_screenshot)
+    home_btn = search_module.get_home_btn(raid_screenshot)
+    diff_btn = search_module.get_difficult_rectangle(raid_screenshot)
+    if home_btn is not None and diff_btn is not None:
+        return RaidScreen.CAMPAIGN
+
+    is_lvl = search_module.is_level_selection(raid_screenshot)
+    if is_lvl:
+        return RaidScreen.CAMPAIGN_LEVEL
+
+    is_pre_fight = search_module.is_pre_fight(raid_screenshot)
+    if is_pre_fight:
+        return RaidScreen.PRE_FIGHT
+
+    raid_screenshot = get_screen()
+    sleep(0.5)
+    in_fight = search_module.is_fighting(raid_screenshot, get_screen())
     if in_fight:
         return RaidScreen.FIGHT
 
@@ -194,13 +212,18 @@ def go_actions_campaign():
     sleep(__random_speed())
 
 
-def go_campaign_location():
-    for index in range(0, count_scroll):
+def go_scroll_location(scrolls):
+    for index in range(0, scrolls):
         __mouse_move(__window_info.width * 0.9, __window_info.height * __random_deviation(0.5))
         pyautogui.mouseDown()
         __mouse_move(__window_info.width * 0.1, __window_info.height * __random_deviation(0.5))
         pyautogui.mouseUp()
         sleep(__random_deviation(0.4))
+
+
+def go_campaign_location():
+    global count_scroll
+    go_scroll_location(count_scroll)
     # raid_screenshot = get_screen()
     # temp_pos = search_module.get_object_position(raid_screenshot, location_template)
     __mouse_move(location_position.center()[0], location_position.center()[1])
@@ -385,7 +408,7 @@ class FeatureThread(Thread):
         is_exit = False
         while not is_exit:
             raid_screenshot = get_screen()
-            points = search_module.test_features(raid_screenshot)
+            points = search_module.get_rect_features(raid_screenshot)
             for point in points:
                 cv2.rectangle(raid_screenshot,
                               (point.x, point.y),
@@ -401,13 +424,18 @@ def feature_thread():
     thread.start()
 
 
-
 def auto_configure():
     global battle_position
     global __current_screen
     global dungeon_position
     global campaign_position
+    global location_position
+    global start_position
+    sleep(__random_deviation(0.5))
     raid_screenshot = get_screen()
+    cur_screen = get_current_screen()
+    print('Current screen: {}'.format(cur_screen))
+
     _, width, height = raid_screenshot.shape[::-1]
     if not search_module.is_main_menu(raid_screenshot):
         print('Please go to main menu and try again')
@@ -432,5 +460,15 @@ def auto_configure():
     __mouse_move(campaign_position.center()[0], campaign_position.center()[1])
     pyautogui.click()
     sleep(__random_deviation(0.5))
-
+    go_scroll_location(5)
+    location_avatars = search_module.get_rect_features(get_screen())
+    location_position = location_avatars[-1]
+    print('Found location position (sulfur trail)')
+    __mouse_move(location_position.center()[0], location_position.center()[1])
+    pyautogui.click()
+    sleep(__random_deviation(0.5))
+    go_location_level()
+    __click_level()
+    start_position = search_module.get_start_btn_pre_fight(get_screen())
+    print('Found start button from pre fight screen')
 

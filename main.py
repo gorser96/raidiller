@@ -110,6 +110,8 @@ if __name__ == '__main__':
     # raid.initialize_positions()
 
     game_module.initialize()
+    game_module.focus_raid()
+    game_module.auto_configure()
     # game_module.focus_raid()
     sleep(0.5)
     # game_module.feature_thread()
