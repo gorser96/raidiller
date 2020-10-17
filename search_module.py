@@ -1,12 +1,11 @@
 # coding=utf-8
 import cv2
 import numpy as np
-import statistics
 from skimage.measure import compare_ssim
 
 from point import Point
 import math
-from test_utils import test_show
+from test_utils import test_show, test_draw_rect, test_draw_point
 
 __template_method = cv2.TM_CCOEFF_NORMED
 
@@ -39,30 +38,50 @@ def __extract_color(source_img, color):
 
 def is_ad(source_img):
     _, width, height = source_img.shape[::-1]
-    mask_close = __extract_color(source_img, (216, 206, 156))
-    cropped = source_img[int(height/2):height, int(width/2):width]
-    mask_btn = __extract_colors(cropped, (176, 114, 0), (186, 130, 6))
-    contours, _ = cv2.findContours(mask_btn, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    contours = list(filter(lambda item: cv2.contourArea(item) > 100, contours))
-    if len(contours) == 0 or len(contours) > 5:
-        return False
-    max_area = max(contours, key=lambda item: cv2.contourArea(item))
-    rect_contours = [cv2.boundingRect(item) for item in contours]
-    max_rect_area = max(rect_contours, key=lambda item: item[2] * item[3])
-    diff = math.fabs(cv2.contourArea(max_area) - max_rect_area[2] * max_rect_area[3])
-    if diff > 900:
-        return False
-
-    contours, _ = cv2.findContours(mask_close, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        # получение массива углов фигуры
-        approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
-        if len(approx) > 6:
-            # x, y, w, h = cv2.boundingRect(contour)
-            # cv2.rectangle(source_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # test_show(source_img)
-            return True
+    cropped = source_img[0:int(height * 0.5), int(width/2):width]
+    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    canny = cv2.Canny(gray, 180, 250)
+    circles = cv2.HoughCircles(canny,
+                               cv2.HOUGH_GRADIENT,
+                               1,
+                               width / 8,
+                               param1=100, param2=25,
+                               minRadius=5, maxRadius=60)
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        circles = circles[0, :]  # 0 - x; 1 - y; 2 - radius
+        mask_close = __extract_color(cropped, (216, 206, 156))
+        contours, _ = cv2.findContours(mask_close, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            perimeter = cv2.arcLength(contour, True)
+            # получение массива углов фигуры
+            approx = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
+            if len(approx) > 6:
+                m = cv2.moments(contour)
+                c_x = int(m["m10"] / m["m00"])
+                c_y = int(m["m01"] / m["m00"])
+                rect = cv2.minAreaRect(contour)
+                box = cv2.boxPoints(rect)
+                box = np.int0(box)
+                cv2.drawContours(cropped, [box], 0, (0, 0, 255), 2)
+                # rect_points = [approx[0], approx[2], approx[4], approx[6]]
+                edge1 = np.int0((box[1][0] - box[0][0], box[1][1] - box[0][1]))
+                edge2 = np.int0((box[2][0] - box[1][0], box[2][1] - box[1][1]))
+                used_edge = edge1
+                if cv2.norm(edge2) > cv2.norm(edge1):
+                    used_edge = edge2
+                reference = (1, 0)  # горизонтальный вектор, задающий горизонт
+                angle = 180.0 / math.pi * math.acos(
+                    (reference[0] * used_edge[0] + reference[1] * used_edge[1]) /
+                    (cv2.norm(reference) * cv2.norm(used_edge)))
+                if math.fabs(angle - 180) > 10:
+                    return False
+                for circle in circles:
+                    if math.hypot(c_x - circle[0], c_y - circle[1]) <= circle[2]:
+                        return True
+                # x, y, w, h = cv2.boundingRect(contour)
+                # cv2.rectangle(source_img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # test_show(source_img)
     return False
 
 
@@ -492,15 +511,14 @@ def get_home_btn(source_img):
     :return: Point
     """
     _, width, height = source_img.shape[::-1]
-    cropped = source_img[int(height * 0.8):height, int(width * 0.8):width]
-    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-    gray = cv2.medianBlur(gray, 5)
-    circles = cv2.HoughCircles(gray,
+    gray = cv2.cvtColor(source_img, cv2.COLOR_BGR2GRAY)
+    canny = cv2.Canny(gray, 180, 250)
+    circles = cv2.HoughCircles(canny,
                                cv2.HOUGH_GRADIENT,
                                1,
                                width / 8,
                                param1=100, param2=25,
-                               minRadius=1, maxRadius=60)
+                               minRadius=5, maxRadius=60)
     if circles is not None:
         circles = np.uint16(np.around(circles))
         if len(circles) == 1:
@@ -509,5 +527,65 @@ def get_home_btn(source_img):
             x = center[0] - radius
             y = center[1] - radius
             wh = radius * 2
-            return Point(x + int(width * 0.8), y + int(height * 0.8), wh, wh)
+            return Point(x, y, wh, wh)
     return None
+
+
+def is_end_of_fight(source_img):
+    _, width, height = source_img.shape[::-1]
+    cropped_left = source_img[int(height * 0.8):height, 0:int(width * 0.3)]
+    cropped_right = source_img[int(height * 0.8):height, int(width * 0.3):width]
+    gray = cv2.cvtColor(cropped_right, cv2.COLOR_BGR2GRAY)
+    canny = cv2.Canny(gray, 170, 250)
+    contours, _ = cv2.findContours(canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(filter(lambda item: cv2.contourArea(item) > 100, contours))
+    if len(contours) < 3:
+        return False
+    contours = [cv2.boundingRect(item) for item in contours]
+    contours.sort(key=lambda item: item[2] * item[3], reverse=True)
+    max_area = max([item[2] * item[3] for item in contours])
+    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 100, contours))
+    contours.sort(key=lambda item: item[0])
+    filtered = []
+    for index in range(1, len(contours)):
+        if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
+            filtered.append(contours[index])
+    if len(filtered) != 3:
+        return False
+
+    gray = cv2.cvtColor(cropped_left, cv2.COLOR_BGR2GRAY)
+    canny = cv2.Canny(gray, 170, 250)
+    contours, _ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    circles = []
+    for contour in contours:
+        approx = cv2.approxPolyDP(contour, 3, True)
+        center, radius = cv2.minEnclosingCircle(approx)
+        if radius < 10:
+            continue
+        center = (int(center[0]), int(center[1]))
+        circles.append((center, radius))
+
+    contours = [[circles[index]] for index in range(0, len(circles))]
+    for index in range(0, len(circles)):
+        for index2 in range(0, len(circles)):
+            if index == index2:
+                continue
+            distance = math.hypot(circles[index][0][0] - circles[index2][0][0],
+                                  circles[index][0][1] - circles[index2][0][1])
+            if distance < circles[index][1] + circles[index2][1]:
+                contours[index].append(circles[index2])
+    for index in range(0, len(circles)):
+        for index2 in range(0, len(circles)):
+            if index == index2:
+                continue
+            if len(list(set(contours[index]) & set(contours[index2]))) > 0:
+                contours[index] = list(set(contours[index] + contours[index2]))
+                contours[index2] = []
+    contours = list(filter(lambda item: len(item) > 0, contours))
+    if len(contours) == 3:
+        return True
+    # for contour in contours:
+    #     max_circle = max(contour, key=lambda circle: circle[1])
+    #     cv2.circle(cropped_left, max_circle[0], int(max_circle[1]), (0, 255, 0), 2)
+    # test_show(cropped_left)
+    return False

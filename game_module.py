@@ -176,7 +176,8 @@ def get_current_screen():
     if len(action_rectangles) > 2:
         return RaidScreen.ACTIONS
 
-    home_btn = search_module.get_home_btn(raid_screenshot)
+    _, width, height = raid_screenshot.shape[::-1]
+    home_btn = search_module.get_home_btn(raid_screenshot[int(height * 0.8):height, int(width * 0.8):width])
     diff_btn = search_module.get_difficult_rectangle(raid_screenshot)
     if home_btn is not None and diff_btn is not None:
         return RaidScreen.CAMPAIGN
@@ -194,6 +195,10 @@ def get_current_screen():
     in_fight = search_module.is_fighting(raid_screenshot, get_screen())
     if in_fight:
         return RaidScreen.FIGHT
+
+    end_fight = search_module.is_end_of_fight(raid_screenshot)
+    if end_fight:
+        return RaidScreen.END_FIGHT
 
     return RaidScreen.FATAL_TOWER
 
@@ -471,4 +476,4 @@ def auto_configure():
     __click_level()
     start_position = search_module.get_start_btn_pre_fight(get_screen())
     print('Found start button from pre fight screen')
-
+    __save_config()
