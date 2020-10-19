@@ -545,8 +545,17 @@ def is_end_of_fight(source_img):
     cropped_right = source_img[int(height * 0.8):height, int(width * 0.3):width]
     gray = cv2.cvtColor(cropped_right, cv2.COLOR_BGR2GRAY)
     canny = cv2.Canny(gray, 170, 250)
+    test_show(canny)
     contours, _ = cv2.findContours(canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    contours = list(filter(lambda item: cv2.contourArea(item) > 100, contours))
+    contours = list(filter(lambda item: cv2.contourArea(item) > 1000, contours))
+    filtered = []
+    for contour in contours:
+        rect = cv2.minAreaRect(contour)
+        area = cv2.contourArea(contour)
+        dif = math.fabs(rect[1][0]*rect[1][1] - area)
+        if dif < 150:
+            filtered.append(contour)
+    contours = filtered
     if len(contours) < 3:
         return False
     contours = [cv2.boundingRect(item) for item in contours]
@@ -554,12 +563,15 @@ def is_end_of_fight(source_img):
     max_area = max([item[2] * item[3] for item in contours])
     contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 1000, contours))
     contours.sort(key=lambda item: item[0])
-    filtered = []
-    for index in range(1, len(contours)):
-        if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
-            filtered.append(contours[index])
-    if len(filtered) != 3:
+    contours = list(set(contours))
+    if len(contours) != 3:
         return False
+    # filtered = []
+    # for index in range(1, len(contours)):
+    #     if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
+    #         filtered.append(contours[index])
+    # if len(filtered) != 3:
+    #     return False
 
     # gray = cv2.cvtColor(cropped_left, cv2.COLOR_BGR2GRAY)
     # canny = cv2.Canny(gray, 170, 250)
@@ -606,6 +618,14 @@ def get_end_fight_buttons(source_img):
     canny = cv2.Canny(gray, 170, 250)
     contours, _ = cv2.findContours(canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     contours = list(filter(lambda item: cv2.contourArea(item) > 100, contours))
+    filtered = []
+    for contour in contours:
+        rect = cv2.minAreaRect(contour)
+        area = cv2.contourArea(contour)
+        dif = math.fabs(rect[1][0]*rect[1][1] - area)
+        if dif < 150:
+            filtered.append(contour)
+    contours = filtered
     if len(contours) < 3:
         return False
     contours = [cv2.boundingRect(item) for item in contours]
@@ -613,14 +633,17 @@ def get_end_fight_buttons(source_img):
     max_area = max([item[2] * item[3] for item in contours])
     contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 1000, contours))
     contours.sort(key=lambda item: item[0])
-    filtered = []
-    for index in range(1, len(contours)):
-        if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
-            filtered.append(contours[index])
+    contours = list(set(contours))
+    if len(contours) != 3:
+        return False
+    # filtered = []
+    # for index in range(1, len(contours)):
+    #     if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
+    #         filtered.append(contours[index])
     buttons_rect = [Point(rect[0] + int(width * 0.3),
                           rect[1] + int(height * 0.8),
                           rect[2],
                           rect[3])
-                    for rect in filtered]
+                    for rect in contours]
     buttons_rect.sort(key=lambda item: item.x)
     return buttons_rect
