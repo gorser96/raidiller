@@ -238,6 +238,7 @@ def is_level_selection(source_img):
     color_to = (20, 80, 110)
     extracted = __extract_colors(source_img, color_from, color_to)
     contours, _ = cv2.findContours(extracted, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(filter(lambda item: cv2.contourArea(item) > 500, contours))
     if len(contours) == 0:
         return False
     rect_contours = [cv2.boundingRect(item) for item in contours]
@@ -540,7 +541,7 @@ def get_home_btn(source_img):
 
 def is_end_of_fight(source_img):
     _, width, height = source_img.shape[::-1]
-    cropped_left = source_img[int(height * 0.8):height, 0:int(width * 0.3)]
+    cropped_left = source_img[int(height * 0.8):height, 0:int(width * 0.4)]
     cropped_right = source_img[int(height * 0.8):height, int(width * 0.3):width]
     gray = cv2.cvtColor(cropped_right, cv2.COLOR_BGR2GRAY)
     canny = cv2.Canny(gray, 170, 250)
@@ -551,7 +552,7 @@ def is_end_of_fight(source_img):
     contours = [cv2.boundingRect(item) for item in contours]
     contours.sort(key=lambda item: item[2] * item[3], reverse=True)
     max_area = max([item[2] * item[3] for item in contours])
-    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 100, contours))
+    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 1000, contours))
     contours.sort(key=lambda item: item[0])
     filtered = []
     for index in range(1, len(contours)):
@@ -560,42 +561,42 @@ def is_end_of_fight(source_img):
     if len(filtered) != 3:
         return False
 
-    gray = cv2.cvtColor(cropped_left, cv2.COLOR_BGR2GRAY)
-    canny = cv2.Canny(gray, 170, 250)
-    contours, _ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    circles = []
-    for contour in contours:
-        approx = cv2.approxPolyDP(contour, 3, True)
-        center, radius = cv2.minEnclosingCircle(approx)
-        if radius < 10:
-            continue
-        center = (int(center[0]), int(center[1]))
-        circles.append((center, radius))
-
-    contours = [[circles[index]] for index in range(0, len(circles))]
-    for index in range(0, len(circles)):
-        for index2 in range(0, len(circles)):
-            if index == index2:
-                continue
-            distance = math.hypot(circles[index][0][0] - circles[index2][0][0],
-                                  circles[index][0][1] - circles[index2][0][1])
-            if distance < circles[index][1] + circles[index2][1]:
-                contours[index].append(circles[index2])
-    for index in range(0, len(circles)):
-        for index2 in range(0, len(circles)):
-            if index == index2:
-                continue
-            if len(list(set(contours[index]) & set(contours[index2]))) > 0:
-                contours[index] = list(set(contours[index] + contours[index2]))
-                contours[index2] = []
-    contours = list(filter(lambda item: len(item) > 0, contours))
-    if len(contours) == 3:
-        return True
+    # gray = cv2.cvtColor(cropped_left, cv2.COLOR_BGR2GRAY)
+    # canny = cv2.Canny(gray, 170, 250)
+    # contours, _ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # circles = []
+    # for contour in contours:
+    #     approx = cv2.approxPolyDP(contour, 3, True)
+    #     center, radius = cv2.minEnclosingCircle(approx)
+    #     if radius < 10:
+    #         continue
+    #     center = (int(center[0]), int(center[1]))
+    #     circles.append((center, radius))
+    #
+    # contours = [[circles[index]] for index in range(0, len(circles))]
+    # for index in range(0, len(circles)):
+    #     for index2 in range(0, len(circles)):
+    #         if index == index2:
+    #             continue
+    #         distance = math.hypot(circles[index][0][0] - circles[index2][0][0],
+    #                               circles[index][0][1] - circles[index2][0][1])
+    #         if distance < circles[index][1] + circles[index2][1]:
+    #             contours[index].append(circles[index2])
+    # for index in range(0, len(circles)):
+    #     for index2 in range(0, len(circles)):
+    #         if index == index2:
+    #             continue
+    #         if len(list(set(contours[index]) & set(contours[index2]))) > 0:
+    #             contours[index] = list(set(contours[index] + contours[index2]))
+    #             contours[index2] = []
+    # contours = list(filter(lambda item: len(item) > 0, contours))
+    # if len(contours) == 3:
+    #     return True
     # for contour in contours:
     #     max_circle = max(contour, key=lambda circle: circle[1])
     #     cv2.circle(cropped_left, max_circle[0], int(max_circle[1]), (0, 255, 0), 2)
     # test_show(cropped_left)
-    return False
+    return True
 
 
 def get_end_fight_buttons(source_img):
@@ -610,12 +611,16 @@ def get_end_fight_buttons(source_img):
     contours = [cv2.boundingRect(item) for item in contours]
     contours.sort(key=lambda item: item[2] * item[3], reverse=True)
     max_area = max([item[2] * item[3] for item in contours])
-    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 100, contours))
+    contours = list(filter(lambda item: math.fabs(item[2] * item[3] - max_area) < 1000, contours))
     contours.sort(key=lambda item: item[0])
     filtered = []
     for index in range(1, len(contours)):
         if math.fabs(contours[index - 1][0] - contours[index][0]) < 30:
             filtered.append(contours[index])
-    buttons_rect = [Point(rect[0] + int(width * 0.3), rect[1] + int(height * 0.8), rect[2], rect[3]) for rect in filtered]
+    buttons_rect = [Point(rect[0] + int(width * 0.3),
+                          rect[1] + int(height * 0.8),
+                          rect[2],
+                          rect[3])
+                    for rect in filtered]
     buttons_rect.sort(key=lambda item: item.x)
     return buttons_rect

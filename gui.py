@@ -99,7 +99,9 @@ class Workspace(QWidget):
         self.repeats = int(self.count_repeat_textbox.text())
         game_module.focus_raid()
         sleep(0.5)
-        if game_module.get_current_screen() != enums.RaidScreen.END_FIGHT:
+        cur_screen = game_module.get_current_screen()
+        print(cur_screen)
+        if cur_screen != enums.RaidScreen.END_FIGHT:
             self.parent().status_bar.showMessage('Ошибка, необходимо быть на экране конца боя!')
             return
         self.start_repeat_btn.setDisabled(True)

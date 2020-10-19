@@ -269,7 +269,7 @@ def wait_fighting():
         if not search_module.is_fighting(frame1, frame2):
             is_done = True
         sleep(__random_deviation(0.5))
-    sleep(__random_deviation(0.5))
+    sleep(__random_deviation(0.7))
 
 
 def initialize():
