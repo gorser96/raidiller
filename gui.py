@@ -1,9 +1,8 @@
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QIcon, QIntValidator
-from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
+from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal, Qt
 from time import sleep
 import game_module
-import enums
 
 
 class MainWindow(QMainWindow):
@@ -32,6 +31,7 @@ class Workspace(QWidget):
     def __init__(self, parent):
         super(Workspace, self).__init__(parent)
         self.is_initialized = False
+        self.is_canceled = False
         self.repeats = 0
         self.layout = QVBoxLayout(self)
 
@@ -51,12 +51,15 @@ class Workspace(QWidget):
         # вкладка "Кампания"
         self.tab_campaign = QWidget()
         self.tab_campaign.layout = QVBoxLayout(self)
+        self.campaign_resize_btn = QPushButton('Оптимальный размер окна')
+        self.campaign_resize_btn.clicked.connect(self.on_click_campaign_resize_btn)
         self.campaign_repeat_btn = QPushButton('"Заново" и "Смена героев"')
         self.campaign_repeat_btn.clicked.connect(self.on_click_campaign_repeat_btn)
-        self.campaign_collection_btn = QPushButton('Вырезать область "Коллекция героев"')
-        self.campaign_collection_btn.clicked.connect(self.on_click_campaign_collection_btn)
         self.campaign_repeat_label = QLabel('Координаты кнопки "Заново": ')
-        self.campaign_collection_label = QLabel('Координаты коллекции: ')
+        self.campaign_is_cycled_checkbox = QCheckBox('До скончания времен')
+        self.campaign_is_cycled_checkbox.setChecked(False)
+        self.campaign_is_cycled_checkbox.setDisabled(True)
+        self.campaign_is_cycled_checkbox.stateChanged.connect(self.state_changed_campaign_is_cycled_checkbox)
         self.campaign_count_repeat_label = QLabel('Количество повторов:')
         self.campaign_count_repeat_textbox = QLineEdit()
         self.campaign_count_repeat_textbox.setValidator(QIntValidator(0, 1000, self))
@@ -72,13 +75,18 @@ class Workspace(QWidget):
         self.campaign_h_layout.layout.addWidget(self.campaign_test_btn)
         self.campaign_h_layout.layout.addWidget(self.campaign_start_btn)
         self.campaign_h_layout.setLayout(self.campaign_h_layout.layout)
+        self.campaign_cancel_btn = QPushButton('Отмена')
+        self.campaign_cancel_btn.clicked.connect(self.on_click_cancel_btn)
+        self.campaign_cancel_btn.setDisabled(True)
+
+        self.tab_campaign.layout.addWidget(self.campaign_resize_btn)
         self.tab_campaign.layout.addWidget(self.campaign_repeat_btn)
-        self.tab_campaign.layout.addWidget(self.campaign_collection_btn)
         self.tab_campaign.layout.addWidget(self.campaign_repeat_label)
-        self.tab_campaign.layout.addWidget(self.campaign_collection_label)
+        self.tab_campaign.layout.addWidget(self.campaign_is_cycled_checkbox)
         self.tab_campaign.layout.addWidget(self.campaign_count_repeat_label)
         self.tab_campaign.layout.addWidget(self.campaign_count_repeat_textbox)
         self.tab_campaign.layout.addWidget(self.campaign_h_layout)
+        self.tab_campaign.layout.addWidget(self.campaign_cancel_btn)
         self.tab_campaign.setLayout(self.tab_campaign.layout)
 
         # вкладка "Слепой повтор"
@@ -122,7 +130,8 @@ class Workspace(QWidget):
         self.tabs.setTabEnabled(2, True)
         self.tabs.setTabEnabled(3, True)
         wi = game_module.update_window_info()
-        self.main_window_label.setText('Координаты окна игры: {} {}'.format(wi.x, wi.y))
+        self.main_window_label.setText('Координаты окна игры: {} {}\n'
+                                       'Размеры окна игры: {} {}'.format(wi.x, wi.y, wi.width, wi.height))
 
     def do_repeat_func(self):
         for index in range(0, self.repeats):
@@ -133,12 +142,33 @@ class Workspace(QWidget):
         self.parent().status_bar.showMessage('Все бои завершены!')
         self.start_repeat_btn.setDisabled(False)
 
+    def state_changed_campaign_is_cycled_checkbox(self, state):
+        if state == Qt.Checked:
+            self.campaign_count_repeat_label.setDisabled(True)
+            self.campaign_count_repeat_textbox.setDisabled(True)
+        else:
+            self.campaign_count_repeat_label.setDisabled(False)
+            self.campaign_count_repeat_textbox.setDisabled(False)
+
     @pyqtSlot()
-    def on_click_campaign_collection_btn(self):
-        point = game_module.init_rect_from_raid('Выделите коллекцию героев')
+    def on_click_campaign_resize_btn(self):
+        game_module.resize_raid_window(1100, 750)
+
+    @pyqtSlot()
+    def on_click_cancel_btn(self):
+        self.is_canceled = True
 
     @pyqtSlot()
     def on_click_campaign_repeat_btn(self):
+        QMessageBox.information(self,
+                                'Help',
+                                'Как выделить 2 кнопки:\n'
+                                '1) Выделяем кнопку "Заново"\n'
+                                '2) Нажимаем Enter\n'
+                                '3) Выделяем кнопку "Смена героев"\n'
+                                '4) Нажимаем Enter\n'
+                                '5) Нажимаем Esc',
+                                QMessageBox.Ok)
         game_module.focus_raid()
         points = game_module.init_rects_from_raid('Выделите кнопку "Заново" и "Смена героев"')
         if len(points) != 2:
@@ -147,21 +177,31 @@ class Workspace(QWidget):
         if points[0].x < points[1].x:
             game_module.set_repeat_btn_position(points[0])
             game_module.set_change_btn_poistion(points[1])
-            self.campaign_repeat_label.setText('Координаты кнопки "Заново": {} {}'.format(points[0].x, points[0].y))
+            self.campaign_repeat_label.setText('Координаты кнопки "Заново": {} {}\n'
+                                               'Координаты кнопки "Смена героев": {} {}'
+                                               .format(points[0].x, points[0].y,
+                                                       points[1].x, points[1].y))
         else:
             game_module.set_repeat_btn_position(points[1])
             game_module.set_change_btn_poistion(points[0])
         self.campaign_count_repeat_textbox.setDisabled(False)
         self.campaign_test_btn.setDisabled(False)
         self.campaign_start_btn.setDisabled(False)
+        self.campaign_cancel_btn.setDisabled(False)
+        self.campaign_is_cycled_checkbox.setDisabled(False)
 
     @pyqtSlot()
     def on_click_campaign_test_btn(self):
         game_module.focus_raid()
-        team = game_module.get_team_icons()
+        need_change = game_module.is_need_change_heroes()
+        QMessageBox.information(self,
+                                'Test information',
+                                'Is need change heroes?\n- {}'.format('yes' if need_change else 'no'),
+                                QMessageBox.Ok)
 
     @pyqtSlot()
     def on_click_campaign_start_btn(self):
+        self.is_canceled = False
         point = game_module.init_rect_from_raid('Выделите кнопку "Заново"')
 
     @pyqtSlot()
