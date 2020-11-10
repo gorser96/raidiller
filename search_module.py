@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import pytesseract
 import os
+import itertools
 from skimage.measure import compare_ssim
 
 from point import Point
@@ -653,18 +654,84 @@ def get_end_fight_buttons(source_img):
     return buttons_rect
 
 
-def text_from_image(img):
+def text_leveling_from_image(img):
     _, width, height = img.shape[::-1]
-    cropped = img[int(0.3*height):int(0.6*height), 0:width]
+    cropped = img[int(0.3*height):int(0.5*height), 0:width]
     _, width, height = cropped.shape[::-1]
     cropped = cv2.resize(cropped, (int(width*1.5), int(height*1.5)))
     gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5))
+    dilated = cv2.dilate(thresh, kernel, iterations=1)
+    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(filter(lambda zip_item: zip_item[1][3] == -1, list(zip(contours, hierarchy[0]))))
+    rects = [(cv2.boundingRect(cnt[0]), cnt[1]) for cnt in contours]
+    rects = list(filter(lambda rect: rect[0][2] > rect[0][3] and rect[0][1] > 10, rects))
+    rects = list(filter(lambda rect: rect[0][3] * 3 < rect[0][2] < rect[0][3] * 8, rects))
+    max_rect = max(rects, key=lambda rect: rect[0][2] * rect[0][3])
+    images = [thresh[rect[0][1]:rect[0][1]+rect[0][3], rect[0][0]:rect[0][0]+rect[0][2]] for rect in rects]
+    images = [cv2.resize(image, (max_rect[0][2], max_rect[0][3])) for image in images]
+    border_size = 10
+    images = [cv2.copyMakeBorder(image, border_size, border_size, border_size, border_size, cv2.BORDER_CONSTANT)
+              for image in images]
+    concat = cv2.vconcat(images)
     pytesseract.pytesseract.tesseract_cmd = os.getcwd() + '\\Tesseract-OCR\\tesseract.exe'
-    data = pytesseract.image_to_data(thresh,
+    data = pytesseract.image_to_data(concat,
                                      lang='rus_best',
                                      output_type=pytesseract.Output.DICT,
                                      config='--oem 1')
     zipped_data = list(zip(data['text'], data['left'], data['top'], data['width'], data['height']))
     zipped_data = list(filter(lambda item: item[0] != '', zipped_data))
     return zipped_data
+
+
+def count_of_digits_energy(img):
+    _, width, height = img.shape[::-1]
+    cropped = img[:int(0.25*height), int(0.8*width):]
+    _, width, height = cropped.shape[::-1]
+    cropped = cv2.resize(cropped, (int(width*2), int(height*2)))
+    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    thresh = cv2.erode(thresh, kernel, iterations=1)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    zipped = list(zip(hierarchy[0], contours))
+    filtered = list(filter(lambda zip_item: zip_item[0][3] != -1, zipped))
+    max_parent = max(itertools.groupby(filtered, key=lambda item: item[0][3]), key=lambda grp: len(list(grp[1])))
+    childs = list(filter(lambda zip_item: zip_item[0][3] == max_parent[0], filtered))
+    childs_rect = [cv2.boundingRect(child[1]) for child in childs]
+    most_right = max(childs_rect, key=lambda rect: rect[0])
+    most_left = min(childs_rect, key=lambda rect: rect[0])
+    most_top = max(childs_rect, key=lambda rect: rect[1])
+    most_height = max(childs_rect, key=lambda rect: rect[3])
+    total_rect = [most_left[0] - 5,
+                  most_top[1] - 5,
+                  most_right[0] + most_right[2] - most_left[0] + 10,
+                  most_height[3] + 5]
+    energy_img = cropped[total_rect[1]:total_rect[1]+total_rect[3], total_rect[0]:total_rect[0]+total_rect[2]].copy()
+    gray = cv2.cvtColor(energy_img, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    # thresh = cv2.erode(thresh, kernel, iterations=1)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return len(contours)
+    # childs_rect = [cv2.boundingRect(cnt) for cnt in contours]
+    # childs_rect.sort(key=lambda rect: rect[0])
+    # test_cells = []
+    # border_size = 6
+    # for rect in childs_rect:
+    #     thresh_cell = thresh[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]].copy()
+    #     # blank_image = np.zeros((thresh_cell.shape[0]+50, thresh_cell.shape[1]+50, 3), np.uint8)
+    #     blank_image = cv2.copyMakeBorder(thresh_cell,
+    #                                      border_size, border_size,
+    #                                      border_size, border_size,
+    #                                      cv2.BORDER_CONSTANT)
+    #     blank_image = cv2.resize(blank_image, (20, 20))
+    #     blank_image = blank_image.flatten()
+    #     test_cells.append(blank_image)
+    # test_cells = np.array(test_cells, dtype=np.float32)
+    # # KNN
+    # knn = cv2.ml.KNearest_load('digits_knearest.dat')
+    # ret, result, neighbours, dist = knn.findNearest(test_cells, k=3)
+    # print(result)
+    # cv2.waitKey(0)
+    # return None

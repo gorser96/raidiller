@@ -680,11 +680,18 @@ def click_start_button():
 
 def is_need_change_heroes():
     raid_screenshot = get_screen()
-    text_data = search_module.text_from_image(raid_screenshot)
+    text_data = search_module.text_leveling_from_image(raid_screenshot)
     lines = [block[0].lower() for block in text_data]
-    return 'макс.'.lower() in lines and 'новы'.lower() not in lines
+    return len(list(filter(lambda line: 'макс' in line, lines))) > 1
 
 
 def get_text_from_image():
     raid_screenshot = get_screen()
-    return search_module.text_from_image(raid_screenshot)
+    return search_module.text_leveling_from_image(raid_screenshot)
+
+
+def is_enough_energy(max_energy):
+    count_of_digits_in_maximum = len(str(max_energy))
+    raid_screenshot = get_screen()
+    return search_module.count_of_digits_energy(raid_screenshot) - count_of_digits_in_maximum > 2
+

@@ -56,6 +56,10 @@ class Workspace(QWidget):
         self.campaign_repeat_btn = QPushButton('"Заново" и "Смена героев"')
         self.campaign_repeat_btn.clicked.connect(self.on_click_campaign_repeat_btn)
         self.campaign_repeat_label = QLabel('Координаты кнопки "Заново": ')
+        self.campaign_max_energy_label = QLabel('Максимальное количество энергии:')
+        self.campaign_max_energy_textbox = QLineEdit()
+        self.campaign_max_energy_textbox.setValidator(QIntValidator(10, 200, self))
+        self.campaign_max_energy_textbox.setDisabled(True)
         self.campaign_is_cycled_checkbox = QCheckBox('До скончания времен')
         self.campaign_is_cycled_checkbox.setChecked(False)
         self.campaign_is_cycled_checkbox.setDisabled(True)
@@ -82,12 +86,15 @@ class Workspace(QWidget):
         self.tab_campaign.layout.addWidget(self.campaign_resize_btn)
         self.tab_campaign.layout.addWidget(self.campaign_repeat_btn)
         self.tab_campaign.layout.addWidget(self.campaign_repeat_label)
+        self.tab_campaign.layout.addWidget(self.campaign_max_energy_label)
+        self.tab_campaign.layout.addWidget(self.campaign_max_energy_textbox)
         self.tab_campaign.layout.addWidget(self.campaign_is_cycled_checkbox)
         self.tab_campaign.layout.addWidget(self.campaign_count_repeat_label)
         self.tab_campaign.layout.addWidget(self.campaign_count_repeat_textbox)
         self.tab_campaign.layout.addWidget(self.campaign_h_layout)
         self.tab_campaign.layout.addWidget(self.campaign_cancel_btn)
         self.tab_campaign.setLayout(self.tab_campaign.layout)
+        self.campaign_worker = Worker(self.do_campaign_process)
 
         # вкладка "Слепой повтор"
         self.tab_repeat = QWidget()
@@ -108,7 +115,7 @@ class Workspace(QWidget):
         self.tab_repeat.layout.addWidget(self.blind_count_repeat_textbox)
         self.tab_repeat.layout.addWidget(self.blind_start_repeat_btn)
         self.tab_repeat.setLayout(self.tab_repeat.layout)
-        self.repeat_worker = Worker(self.do_repeat_func)
+        self.blind_repeat_worker = Worker(self.do_repeat_func)
 
         # Добавление вкладок
         self.tabs.addTab(self.tab_main, "Главное")
@@ -142,6 +149,51 @@ class Workspace(QWidget):
         self.parent().status_bar.showMessage('Все бои завершены!')
         self.start_repeat_btn.setDisabled(False)
 
+    def do_campaign_process(self):
+        game_module.focus_raid()
+        if self.campaign_is_cycled_checkbox.isChecked():
+            max_energy = int(self.campaign_max_energy_textbox.text())
+            index = 0
+            while not self.is_canceled:
+                try:
+                    can_continue = game_module.is_enough_energy(max_energy)
+                    print('enough of energy: {}'.format('yes' if can_continue else 'no'))
+                    if can_continue:
+                        need_update_heroes = game_module.is_need_change_heroes()
+                        print('need update heroes: {}'.format('yes' if need_update_heroes else 'no'))
+                        if need_update_heroes:
+                            game_module.click_change()
+                            # может выполниться миссия или испытание, которое помешает работе
+                            sleep(6)
+                            game_module.scroll_to_end_of_collection()
+                            game_module.update_heroes()
+                            sleep(2)
+                            game_module.click_start_button()
+                        else:
+                            game_module.click_repeat()
+                        self.parent().status_bar.showMessage('Номер боя: {}'.format(index + 1))
+                        index = index + 1
+                        sleep(2)
+                        game_module.wait_fighting()
+                        sleep(2)
+                    else:
+                        self.parent().status_bar.showMessage('Ожидание энергии')
+                        # проверяем энергию раз в минуту, если накопилось 10 и более запускаем бой
+                        sleep(60)
+                except Exception:
+                    print('error in main cycle')
+                    continue
+        else:
+            for index in range(0, self.repeats):
+                self.parent().status_bar.showMessage('Номер боя: {}'.format(index + 1))
+                game_module.click_repeat()
+                sleep(2)
+                game_module.wait_fighting()
+                if self.is_canceled:
+                    break
+            self.parent().status_bar.showMessage('Все бои завершены!')
+            self.start_repeat_btn.setDisabled(False)
+
     def state_changed_campaign_is_cycled_checkbox(self, state):
         if state == Qt.Checked:
             self.campaign_count_repeat_label.setDisabled(True)
@@ -157,6 +209,13 @@ class Workspace(QWidget):
     @pyqtSlot()
     def on_click_cancel_btn(self):
         self.is_canceled = True
+        self.campaign_cancel_btn.setDisabled(True)
+        self.campaign_start_btn.setDisabled(False)
+        self.campaign_resize_btn.setDisabled(False)
+        self.campaign_test_btn.setDisabled(False)
+        self.campaign_repeat_btn.setDisabled(False)
+        self.campaign_is_cycled_checkbox.setDisabled(False)
+        self.campaign_max_energy_textbox.setDisabled(False)
 
     @pyqtSlot()
     def on_click_campaign_repeat_btn(self):
@@ -189,6 +248,7 @@ class Workspace(QWidget):
         self.campaign_start_btn.setDisabled(False)
         self.campaign_cancel_btn.setDisabled(False)
         self.campaign_is_cycled_checkbox.setDisabled(False)
+        self.campaign_max_energy_textbox.setDisabled(False)
 
     @pyqtSlot()
     def on_click_campaign_test_btn(self):
@@ -198,11 +258,27 @@ class Workspace(QWidget):
                                 'Test information',
                                 'Is need change heroes?\n- {}'.format('yes' if need_change else 'no'),
                                 QMessageBox.Ok)
-
+        max_energy = int(self.campaign_max_energy_textbox.text())
+        is_enough_energy = game_module.is_enough_energy(max_energy)
+        QMessageBox.information(self,
+                                'Test information',
+                                'Enough energy?\n- {}'.format('yes' if is_enough_energy else 'no'),
+                                QMessageBox.Ok)
     @pyqtSlot()
     def on_click_campaign_start_btn(self):
         self.is_canceled = False
-        point = game_module.init_rect_from_raid('Выделите кнопку "Заново"')
+        if not self.campaign_is_cycled_checkbox.isChecked():
+            self.repeats = int(self.campaign_count_repeat_textbox.text())
+
+        self.campaign_worker.start()
+
+        self.campaign_cancel_btn.setDisabled(False)
+        self.campaign_start_btn.setDisabled(True)
+        self.campaign_resize_btn.setDisabled(True)
+        self.campaign_test_btn.setDisabled(True)
+        self.campaign_repeat_btn.setDisabled(True)
+        self.campaign_is_cycled_checkbox.setDisabled(True)
+        self.campaign_max_energy_textbox.setDisabled(True)
 
     @pyqtSlot()
     def on_click_blind_extract_btn(self):
