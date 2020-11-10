@@ -1,1 +1,1 @@
-pyinstaller --onefile --icon=bot.ico --noconsole main.py
+pyinstaller --onefile --icon=bot.ico --noconsole main.py --name raidiller.exe

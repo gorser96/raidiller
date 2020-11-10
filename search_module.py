@@ -1,6 +1,8 @@
 # coding=utf-8
 import cv2
 import numpy as np
+import pytesseract
+import os
 from skimage.measure import compare_ssim
 
 from point import Point
@@ -442,9 +444,12 @@ def get_icon_teams(source_img):
     :param source_img:
     :return: Список типа Point, где 0й элемент - герой с аурой, 2й - верхний, 3й - нижний и т.д.
     """
-    color_from = (17, 46, 82)
-    color_to = (27, 57, 92)
-    mask = cv2.inRange(source_img, color_from, color_to)
+    _, width, height = source_img.shape[::-1]
+    cropped = source_img[0:int(height * 0.8), 0:int(width / 2)].copy()
+    template_pixel = np.uint8(source_img[int(height / 2), 5])
+    # color_from = (17, 46, 82)
+    # color_to = (27, 57, 92)
+    mask = cv2.inRange(cropped, template_pixel, template_pixel)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     closed = cv2.erode(mask, kernel, iterations=1)
     (contours, hierarchy) = cv2.findContours(closed, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -455,7 +460,7 @@ def get_icon_teams(source_img):
     rectangles.remove(max(rectangles, key=lambda x: x[2] * x[3]))
     rectangles.sort(key=lambda rect: rect[2] * rect[3], reverse=True)
     mean = np.mean([rect[2] * rect[3] for rect in rectangles[0:4]])
-    rectangles = list(filter(lambda rect: math.fabs(rect[2] * rect[3] / mean - 1) < 0.15,
+    rectangles = list(filter(lambda rect: math.fabs(rect[2] * rect[3] / mean - 1) < 0.22,
                              rectangles))
 
     if len(rectangles) == 4:
@@ -545,7 +550,6 @@ def is_end_of_fight(source_img):
     cropped_right = source_img[int(height * 0.8):height, int(width * 0.3):width]
     gray = cv2.cvtColor(cropped_right, cv2.COLOR_BGR2GRAY)
     canny = cv2.Canny(gray, 170, 250)
-    test_show(canny)
     contours, _ = cv2.findContours(canny, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     contours = list(filter(lambda item: cv2.contourArea(item) > 1000, contours))
     filtered = []
@@ -647,3 +651,20 @@ def get_end_fight_buttons(source_img):
                     for rect in contours]
     buttons_rect.sort(key=lambda item: item.x)
     return buttons_rect
+
+
+def text_from_image(img):
+    _, width, height = img.shape[::-1]
+    cropped = img[int(0.3*height):int(0.6*height), 0:width]
+    _, width, height = cropped.shape[::-1]
+    cropped = cv2.resize(cropped, (int(width*1.5), int(height*1.5)))
+    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    pytesseract.pytesseract.tesseract_cmd = os.getcwd() + '\\Tesseract-OCR\\tesseract.exe'
+    data = pytesseract.image_to_data(thresh,
+                                     lang='rus_best',
+                                     output_type=pytesseract.Output.DICT,
+                                     config='--oem 1')
+    zipped_data = list(zip(data['text'], data['left'], data['top'], data['width'], data['height']))
+    zipped_data = list(filter(lambda item: item[0] != '', zipped_data))
+    return zipped_data

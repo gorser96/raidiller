@@ -1,5 +1,8 @@
 # coding=utf-8
 import smtplib
+import game_module
+from point import Point
+import time
 import sys
 from PyQt5.QtWidgets import QApplication
 import gui
@@ -97,6 +100,25 @@ if __name__ == '__main__':
     #         cv2.rectangle(gray2, (x, y), (x + w, y + h), (0, 255, 0), 1)
     # cv2.imshow('gray2', gray2)
     # print(int(lvl_s))
-    app = QApplication(sys.argv)
-    window = gui.MainWindow()
-    sys.exit(app.exec_())
+
+    game_module.initialize()
+    game_module.resize_raid_window(1100, 750)
+    game_module.focus_raid()
+    game_module.set_change_btn_poistion(Point(682, 657 - 40, 188, 75))
+    game_module.set_repeat_btn_position(Point(481, 655 - 40, 188, 75))
+
+    print('need to change heroes?')
+    is_change = game_module.is_need_change_heroes()
+    print('yes' if is_change else 'no')
+    if is_change:
+        game_module.click_change()
+    else:
+        game_module.click_repeat()
+    time.sleep(3)
+    game_module.scroll_to_end_of_collection()
+    game_module.update_heroes()
+    game_module.click_start_button()
+
+    # app = QApplication(sys.argv)
+    # window = gui.MainWindow()
+    # sys.exit(app.exec_())

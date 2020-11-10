@@ -1,4 +1,5 @@
 import cv2
+from threading import Thread
 
 
 def test_show(source_img):
@@ -13,3 +14,14 @@ def test_draw_rect(source_img, rect):
 
 def test_draw_point(source_img, point):
     test_draw_rect(source_img, (point.x, point.y, point.width, point.height))
+
+
+class TestThread(Thread):
+    def __init__(self, func):
+        """Инициализация потока"""
+        Thread.__init__(self)
+        self.do_process = func
+
+    def run(self):
+        """Запуск потока"""
+        self.do_process()

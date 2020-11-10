@@ -2,16 +2,18 @@
 import win32gui
 import cv2
 from point import Point
-from numpy import uint8
+from numpy import uint8, int32
 from numpy.ma import array
 from ctypes import windll
 from time import sleep
 from PIL import ImageGrab
 from enums import RaidScreen
 from easygui import *
-from test_utils import test_show, test_draw_point
+from test_utils import test_show, test_draw_point, TestThread
+from threading import Thread
 import search_module
 import pyautogui
+import mouse
 import random
 import pickle
 import os.path
@@ -34,6 +36,7 @@ level = 0
 start_position = None
 repeat_position = None
 repeat_btn_template = None
+change_position = None
 
 
 def __save_config():
@@ -93,10 +96,26 @@ def __random_deviation(center):
     return random.uniform(center - 0.1, center + 0.1)
 
 
-def __mouse_move(x, y):
-    pyautogui.moveTo(__window_info.x + x,
-                     __window_info.y + y + __border_height,
-                     __random_speed())
+def __mouse_move(x, y, speed=None):
+    mouse.move(__window_info.x + x,
+               __window_info.y + y + __border_height,
+               duration=__random_speed() if speed is None else speed)
+
+
+def resize_raid_window(width, height):
+    if __raid_hwnd:
+        screen_width, screen_height = pyautogui.size()
+        x = __window_info.x
+        y = __window_info.y
+        if x + width > screen_width:
+            x = x + (screen_width - (x + width)) - 10
+        if y + height > screen_height:
+            y = y + (screen_height - (y + height)) - 10 - __border_height
+        win32gui.MoveWindow(__raid_hwnd, x, y, width, height, True)
+        __window_info.x = x
+        __window_info.y = y
+        __window_info.width = width
+        __window_info.height = height
 
 
 def __set_window_coordinates(hwnd, _):
@@ -119,14 +138,12 @@ def __set_window_coordinates(hwnd, _):
 def __click_level():
     global level
     if level > 4:
-        pyautogui.moveTo(__window_info.center()[0],
-                         __window_info.y + __window_info.height * 0.6,
-                         __random_speed())
-        pyautogui.mouseDown()
-        pyautogui.moveTo(__window_info.center()[0],
-                         __window_info.y + __window_info.height * 0.3,
-                         __random_speed())
-        pyautogui.mouseUp()
+        mouse.move(__window_info.center()[0],
+                   __window_info.y + __window_info.height * 0.6,
+                   duration=__random_speed())
+        mouse.drag(__window_info.center()[0], __window_info.y + __window_info.height * 0.6,
+                   __window_info.center()[0], __window_info.y + __window_info.height * 0.3,
+                   duration=__random_speed())
     sleep(__random_speed())
     raid_screenshot = get_screen()
     position = search_module.get_level_position(raid_screenshot, level)
@@ -134,15 +151,16 @@ def __click_level():
                                                           position.x:position.x + position.width])
     btn_position.x = position.x + btn_position.x
     btn_position.y = position.y + btn_position.y
-    pyautogui.moveTo(__window_info.x + btn_position.center()[0],
-                     __window_info.y + btn_position.center()[1] + __border_height,
-                     __random_speed())
-    pyautogui.click()
+    mouse.move(__window_info.x + btn_position.center()[0],
+               __window_info.y + btn_position.center()[1] + __border_height,
+               __random_speed())
+    mouse.click()
     sleep(__random_deviation(0.5))
 
 
 def focus_raid():
     win32gui.SetForegroundWindow(__raid_hwnd)
+    sleep(__random_deviation(0.2))
 
 
 def get_screen():
@@ -204,23 +222,23 @@ def get_current_screen():
 def go_main_actions():
     __mouse_move(battle_position.center()[0],
                  battle_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_speed())
 
 
 def go_actions_campaign():
     __mouse_move(campaign_position.center()[0],
                  campaign_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_speed())
 
 
 def go_scroll_location(scrolls):
     for index in range(0, scrolls):
         __mouse_move(__window_info.width * 0.9, __window_info.height * __random_deviation(0.5))
-        pyautogui.mouseDown()
-        __mouse_move(__window_info.width * 0.1, __window_info.height * __random_deviation(0.5))
-        pyautogui.mouseUp()
+        mouse.drag(__window_info.width * 0.9, __window_info.height * __random_deviation(0.5),
+                   __window_info.width * 0.1, __window_info.height * __random_deviation(0.5),
+                   duration=__random_speed())
         sleep(__random_deviation(0.4))
 
 
@@ -230,7 +248,7 @@ def go_campaign_location():
     # raid_screenshot = get_screen()
     # temp_pos = search_module.get_object_position(raid_screenshot, location_template)
     __mouse_move(location_position.center()[0], location_position.center()[1])
-    pyautogui.click()
+    mouse.click()
 
 
 def go_location_level():
@@ -239,25 +257,30 @@ def go_location_level():
 
 def click_start():
     __mouse_move(start_position.center()[0], start_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_speed())
     buttons = search_module.check_aura_at_start(get_screen())
     if buttons is not None:
         __mouse_move(buttons[1][0] + buttons[1][2] / 2,
                      buttons[1][1] + buttons[1][3] / 2)
-        pyautogui.click()
+        mouse.click()
 
 
 def click_repeat_auto():
     buttons = search_module.get_end_fight_buttons(get_screen())
     repeat_btn = buttons[0]
     __mouse_move(repeat_btn.center()[0], repeat_btn.center()[1])
-    pyautogui.click()
+    mouse.click()
 
 
 def click_repeat():
     __mouse_move(repeat_position.center()[0], repeat_position.center()[1])
-    pyautogui.click()
+    mouse.click()
+
+
+def click_change():
+    __mouse_move(change_position.center()[0], change_position.center()[1])
+    mouse.click()
 
 
 def wait_fighting():
@@ -293,6 +316,29 @@ def update_window_info():
         h = rect[3] - y
         __window_info = Point(x, y, w, h)
     return __window_info
+
+
+def init_rects_from_raid(name):
+    raid_screenshot = get_screen()
+    from_center = False
+    show_crosshair = False
+    rects = cv2.selectROIs(name, raid_screenshot, fromCenter=from_center, showCrosshair=show_crosshair)
+    points = [Point(rect[0], rect[1], rect[2], rect[3]) for rect in rects]
+    cv2.destroyAllWindows()
+    return points
+
+
+def init_rect_from_raid(name):
+    raid_screenshot = get_screen()
+    from_center = False
+    show_crosshair = False
+    rect = cv2.selectROI(name,
+                         raid_screenshot,
+                         fromCenter=from_center,
+                         showCrosshair=show_crosshair)
+    rect_position = Point(rect[0], rect[1], rect[2], rect[3])
+    cv2.destroyAllWindows()
+    return rect_position
 
 
 def configure():
@@ -416,36 +462,23 @@ def configure():
            'OK')
 
 
-from threading import Thread
-
-
-class FeatureThread(Thread):
-    """
-    Пример многопоточной загрузки файлов из интернета
-    """
-
-    def __init__(self):
-        """Инициализация потока"""
-        Thread.__init__(self)
-
-    def run(self):
-        """Запуск потока"""
-        is_exit = False
-        while not is_exit:
-            raid_screenshot = get_screen()
-            points = search_module.get_rect_features(raid_screenshot)
-            for point in points:
-                cv2.rectangle(raid_screenshot,
-                              (point.x, point.y),
-                              (point.x + point.width, point.y + point.height),
-                              (0, 255, 0),
-                              1)
-            cv2.imshow('thread', raid_screenshot)
-            cv2.waitKey(1)
+def __func_feature():
+    is_exit = False
+    while not is_exit:
+        raid_screenshot = get_screen()
+        points = search_module.get_rect_features(raid_screenshot)
+        for point in points:
+            cv2.rectangle(raid_screenshot,
+                          (point.x, point.y),
+                          (point.x + point.width, point.y + point.height),
+                          (0, 255, 0),
+                          1)
+        cv2.imshow('thread', raid_screenshot)
+        cv2.waitKey(1)
 
 
 def feature_thread():
-    thread = FeatureThread()
+    thread = TestThread(__func_feature)
     thread.start()
 
 
@@ -472,7 +505,7 @@ def auto_configure():
                             battle_loc[2], battle_loc[3])
     print('Found battle button')
     __mouse_move(battle_position.center()[0], battle_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_deviation(0.5))
     actions = search_module.get_actions_rectangles(get_screen())
     if actions is None:
@@ -482,7 +515,7 @@ def auto_configure():
     dungeon_position = Point(actions[1][0], actions[1][1], actions[1][2], actions[1][3])
     print('Found actions')
     __mouse_move(campaign_position.center()[0], campaign_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_deviation(0.5))
     go_scroll_location(5)
     raid_screenshot = get_screen()
@@ -491,9 +524,167 @@ def auto_configure():
     location_position = location_avatars[-1]
     print('Found location position (sulfur trail)')
     __mouse_move(location_position.center()[0], location_position.center()[1])
-    pyautogui.click()
+    mouse.click()
     sleep(__random_deviation(0.5))
     level = 6
     __click_level()
     start_position = search_module.get_start_btn_pre_fight(get_screen())
     print('Found start button from pre fight screen')
+
+
+def set_change_btn_poistion(point):
+    global change_position
+    change_position = point
+
+
+def set_repeat_btn_position(point):
+    global repeat_position
+    repeat_position = point
+
+
+def get_team_icons():
+    raid_screenshot = get_screen()
+    team = search_module.get_icon_teams(raid_screenshot)
+    return team
+
+
+class CollectionCheckThread(Thread):
+    def __init__(self, template_pixel_tuple, top_rect_collection):
+        """Инициализация потока"""
+        Thread.__init__(self)
+        self.template_pixel_tuple = template_pixel_tuple
+        self.top_rect_collection = top_rect_collection
+
+    def run(self):
+        """Запуск потока"""
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        while True:
+            raid_screenshot = get_screen()
+            cropped = raid_screenshot[self.top_rect_collection:, :]
+            mask = cv2.inRange(cropped, self.template_pixel_tuple, self.template_pixel_tuple)
+            mask = cv2.morphologyEx(mask, cv2.RETR_TREE, kernel)
+            white_percent = len(mask[mask == 255]) / mask.size
+            if white_percent > 0.35:
+                break
+            sleep(0.5)
+
+
+def scroll_to_end_of_collection():
+    raid_screenshot = get_screen()
+    height, width, _ = raid_screenshot.shape
+    template_pixel = raid_screenshot[height - 2, width - 2]
+    template_pixel_tuple = uint8(template_pixel)
+    top_rect_collection = 0
+    for y in range(height - 2, 0, -1):
+        if (raid_screenshot[y, width - 2] != template_pixel).any():
+            top_rect_collection = y
+            break
+    cropped = raid_screenshot[top_rect_collection:height, :]
+    mask = cv2.inRange(cropped, template_pixel_tuple, template_pixel_tuple)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    mask = cv2.morphologyEx(mask, cv2.RETR_TREE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [cv2.boundingRect(cnt) for cnt in contours]
+    most_right_cnt = max(contours, key=lambda cnt: cnt[0])
+    x, y, w, h = most_right_cnt
+    y = y + int(h / 2)
+    x = x - 5
+    while mask[y, x] == 255:
+        x = x - 1
+    y = top_rect_collection + int(cropped.shape[0] / 2)
+    thr_check = CollectionCheckThread(template_pixel_tuple, top_rect_collection)
+    thr_check.start()
+    while thr_check.is_alive():
+        mouse.move(__window_info.x + x - 20, __window_info.y + y + __border_height, duration=0.7)
+        mouse.drag(__window_info.x + x - 20, __window_info.y + y + __border_height,
+                   __window_info.x + 20, __window_info.y + y + __border_height,
+                   duration=1.5)
+    thr_check.join()
+    sleep(0.5)
+
+
+def update_heroes():
+    raid_screenshot = get_screen()
+    height, width, _ = raid_screenshot.shape
+    pause = 0.2
+    team = search_module.get_icon_teams(raid_screenshot)
+    # убираем героев
+    __mouse_move(team[1].center()[0], team[1].center()[1])
+    mouse.click()
+    sleep(pause)
+    __mouse_move(team[2].center()[0], team[2].center()[1])
+    mouse.click()
+    sleep(pause)
+    __mouse_move(team[3].center()[0], team[3].center()[1])
+    mouse.click()
+    sleep(pause)
+
+    template_pixel = raid_screenshot[height - 2, width - 2]
+    template_pixel_tuple = uint8(template_pixel)
+    top_rect_collection = 0
+    for y in range(height - 2, 0, -1):
+        if (raid_screenshot[y, width - 2] != template_pixel).any():
+            top_rect_collection = y
+            break
+    cropped = raid_screenshot[top_rect_collection:height, :]
+    mask = cv2.inRange(cropped, template_pixel_tuple, template_pixel_tuple)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    mask = cv2.morphologyEx(mask, cv2.RETR_TREE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = [cv2.boundingRect(cnt) for cnt in contours]
+    most_right_cnt = max(boxes, key=lambda box: box[0])
+    x, y, w, h = most_right_cnt
+    y = y + int(h / 2)
+    x = x - 5
+    while mask[y, x] == 255:
+        x = x - 1
+    new_heroes = [Point(rect[0], rect[1] + top_rect_collection, rect[2], rect[3])
+                  for rect in list(filter(lambda box: box[0] < x, boxes))]
+    new_heroes.sort(key=lambda point: point.x, reverse=True)
+    # добавляем новых героев
+    __mouse_move(new_heroes[0].center()[0], new_heroes[0].center()[1])
+    mouse.click()
+    sleep(pause)
+    __mouse_move(new_heroes[1].center()[0], new_heroes[1].center()[1])
+    mouse.click()
+    sleep(pause)
+    __mouse_move(new_heroes[2].center()[0], new_heroes[2].center()[1])
+    mouse.click()
+    sleep(pause)
+
+
+def click_start_button():
+    raid_screenshot = get_screen()
+    height, width, _ = raid_screenshot.shape
+    template_pixel = raid_screenshot[height - 2, width - 2]
+    template_pixel_tuple = uint8(template_pixel)
+    top_rect_collection = 0
+    for y in range(height - 2, 0, -1):
+        if (raid_screenshot[y, width - 2] != template_pixel).any():
+            top_rect_collection = y
+            break
+    cropped = raid_screenshot[top_rect_collection:height, :]
+    mask = cv2.inRange(cropped, template_pixel_tuple, template_pixel_tuple)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    mask = cv2.morphologyEx(mask, cv2.RETR_TREE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    boxes = [cv2.boundingRect(cnt) for cnt in contours]
+    boxes.sort(key=lambda box: box[0], reverse=True)
+    if boxes[0][1] > boxes[1][1]:
+        start_point = Point(boxes[0][0], boxes[0][1] + top_rect_collection, boxes[0][2], boxes[0][3])
+    else:
+        start_point = Point(boxes[1][0], boxes[1][1] + top_rect_collection, boxes[1][2], boxes[1][3])
+    __mouse_move(start_point.center()[0], start_point.center()[1])
+    mouse.click()
+
+
+def is_need_change_heroes():
+    raid_screenshot = get_screen()
+    text_data = search_module.text_from_image(raid_screenshot)
+    lines = [block[0].lower() for block in text_data]
+    return 'макс.'.lower() in lines and 'новы'.lower() not in lines
+
+
+def get_text_from_image():
+    raid_screenshot = get_screen()
+    return search_module.text_from_image(raid_screenshot)
