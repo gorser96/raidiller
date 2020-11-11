@@ -654,6 +654,25 @@ def get_end_fight_buttons(source_img):
     return buttons_rect
 
 
+def level_rectangles(img):
+    _, width, height = img.shape[::-1]
+    cropped = img[int(0.3 * height):int(0.5 * height), 0:width]
+    _, width, height = cropped.shape[::-1]
+    cropped = cv2.resize(cropped, (int(width * 1.5), int(height * 1.5)))
+    gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5))
+    dilated = cv2.dilate(thresh, kernel, iterations=1)
+    contours, hierarchy = cv2.findContours(dilated, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = list(filter(lambda zip_item: zip_item[1][3] == -1, list(zip(contours, hierarchy[0]))))
+    rects = [cv2.boundingRect(cnt[0]) for cnt in contours]
+    rects = list(filter(lambda rect: rect[2] > rect[3] and rect[1] > 10, rects))
+    rects = list(filter(lambda rect: rect[3] * 3 < rect[2] < rect[3] * 8, rects))
+    rects = list(filter(lambda rect: rect[3] * rect[2] > 150, rects))
+    rects.sort(key=lambda rect: rect[0])
+    return rects
+
+
 def text_leveling_from_image(img):
     _, width, height = img.shape[::-1]
     cropped = img[int(0.3*height):int(0.5*height), 0:width]
@@ -675,11 +694,13 @@ def text_leveling_from_image(img):
     images = [cv2.copyMakeBorder(image, border_size, border_size, border_size, border_size, cv2.BORDER_CONSTANT)
               for image in images]
     concat = cv2.vconcat(images)
-    pytesseract.pytesseract.tesseract_cmd = os.getcwd() + '\\Tesseract-OCR\\tesseract.exe'
+    tesseract_path = os.getcwd() + '\\Tesseract-OCR'
+    config_line = '--oem 1 --tessdata-dir "{}"'.format(tesseract_path + '\\tessdata')
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path + '\\tesseract.exe'
     data = pytesseract.image_to_data(concat,
                                      lang='rus_best',
                                      output_type=pytesseract.Output.DICT,
-                                     config='--oem 1')
+                                     config=config_line)
     zipped_data = list(zip(data['text'], data['left'], data['top'], data['width'], data['height']))
     zipped_data = list(filter(lambda item: item[0] != '', zipped_data))
     return zipped_data
@@ -711,7 +732,7 @@ def count_of_digits_energy(img):
     energy_img = cropped[total_rect[1]:total_rect[1]+total_rect[3], total_rect[0]:total_rect[0]+total_rect[2]].copy()
     gray = cv2.cvtColor(energy_img, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    # thresh = cv2.erode(thresh, kernel, iterations=1)
+    thresh = cv2.erode(thresh, kernel, iterations=1)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     return len(contours)
     # childs_rect = [cv2.boundingRect(cnt) for cnt in contours]

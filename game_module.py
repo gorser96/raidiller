@@ -17,6 +17,7 @@ import mouse
 import random
 import pickle
 import os.path
+import math
 
 __name_of_window = "Raid: Shadow Legends"
 __config_file = 'config.pkl'
@@ -680,9 +681,12 @@ def click_start_button():
 
 def is_need_change_heroes():
     raid_screenshot = get_screen()
-    text_data = search_module.text_leveling_from_image(raid_screenshot)
-    lines = [block[0].lower() for block in text_data]
-    return len(list(filter(lambda line: 'макс' in line, lines))) > 1
+    rects = search_module.level_rectangles(raid_screenshot)
+    width_deviation = [math.fabs(rects[0][2] - rect[2]) for rect in rects]
+    return len(list(filter(lambda deviation: deviation < 10, width_deviation))) > 2
+    # text_data = search_module.text_leveling_from_image(raid_screenshot)
+    # lines = [block[0].lower() for block in text_data]
+    # return len(list(filter(lambda line: 'макс' in line, lines))) > 1
 
 
 def get_text_from_image():

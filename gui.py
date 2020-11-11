@@ -59,7 +59,6 @@ class Workspace(QWidget):
         self.campaign_max_energy_label = QLabel('Максимальное количество энергии:')
         self.campaign_max_energy_textbox = QLineEdit()
         self.campaign_max_energy_textbox.setValidator(QIntValidator(10, 200, self))
-        self.campaign_max_energy_textbox.setDisabled(True)
         self.campaign_is_cycled_checkbox = QCheckBox('До скончания времен')
         self.campaign_is_cycled_checkbox.setChecked(False)
         self.campaign_is_cycled_checkbox.setDisabled(True)
@@ -180,8 +179,8 @@ class Workspace(QWidget):
                         self.parent().status_bar.showMessage('Ожидание энергии')
                         # проверяем энергию раз в минуту, если накопилось 10 и более запускаем бой
                         sleep(60)
-                except Exception:
-                    print('error in main cycle')
+                except Exception as e:
+                    self.parent().status_bar.showMessage(str(e))
                     continue
         else:
             for index in range(0, self.repeats):
@@ -215,7 +214,7 @@ class Workspace(QWidget):
         self.campaign_test_btn.setDisabled(False)
         self.campaign_repeat_btn.setDisabled(False)
         self.campaign_is_cycled_checkbox.setDisabled(False)
-        self.campaign_max_energy_textbox.setDisabled(False)
+        self.parent().status_bar.showMessage('Отмена')
 
     @pyqtSlot()
     def on_click_campaign_repeat_btn(self):
@@ -248,7 +247,6 @@ class Workspace(QWidget):
         self.campaign_start_btn.setDisabled(False)
         self.campaign_cancel_btn.setDisabled(False)
         self.campaign_is_cycled_checkbox.setDisabled(False)
-        self.campaign_max_energy_textbox.setDisabled(False)
 
     @pyqtSlot()
     def on_click_campaign_test_btn(self):
@@ -258,12 +256,13 @@ class Workspace(QWidget):
                                 'Test information',
                                 'Is need change heroes?\n- {}'.format('yes' if need_change else 'no'),
                                 QMessageBox.Ok)
-        max_energy = int(self.campaign_max_energy_textbox.text())
-        is_enough_energy = game_module.is_enough_energy(max_energy)
-        QMessageBox.information(self,
-                                'Test information',
-                                'Enough energy?\n- {}'.format('yes' if is_enough_energy else 'no'),
-                                QMessageBox.Ok)
+        if self.campaign_max_energy_textbox.text() != '':
+            max_energy = int(self.campaign_max_energy_textbox.text())
+            is_enough_energy = game_module.is_enough_energy(max_energy)
+            QMessageBox.information(self,
+                                    'Test information',
+                                    'Enough energy?\n- {}'.format('yes' if is_enough_energy else 'no'),
+                                    QMessageBox.Ok)
     @pyqtSlot()
     def on_click_campaign_start_btn(self):
         self.is_canceled = False
@@ -278,7 +277,6 @@ class Workspace(QWidget):
         self.campaign_test_btn.setDisabled(True)
         self.campaign_repeat_btn.setDisabled(True)
         self.campaign_is_cycled_checkbox.setDisabled(True)
-        self.campaign_max_energy_textbox.setDisabled(True)
 
     @pyqtSlot()
     def on_click_blind_extract_btn(self):
